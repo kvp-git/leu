@@ -1,0 +1,294 @@
+#define PIN_LED (13)
+#define PIN_RS485ENA (14)
+
+#define ADDR_ALL (0x7f)
+
+enum COMMANDS
+{
+  CMD_INFO = 0x00,
+  CMD_SIGNAL_SET = 0x01,
+  CMD_MOTOR_SET = 0x02,
+  CMD_MOTOR_PULSE = 0x03,
+  CMD_SENSOR_GET = 0x04,
+  CMD_STOP_ALL = 0x7f,
+};
+
+#define REPLY_WAIT_MSEC (500)
+
+int blinkState = HIGH;
+
+unsigned long timeDiff(unsigned long t0, unsigned long t1)
+{
+  if (t0 < t1)
+    return (t1 - t0);
+  return ((((unsigned long long)t1) + 0x100000000ul) - (unsigned long long)t0);
+}
+
+void dumpPkt(const char* tag, const uint8_t* pkt, size_t len)
+{
+  Serial.print(tag);
+  for (size_t t = 0; t < len; t++)
+  {
+    Serial.print(" 0x");
+    Serial.print((pkt[t] >> 4) & 15, HEX);
+    Serial.print(pkt[t] & 15, HEX);
+  }
+  Serial.println("");
+}
+
+#define ERR_ERR (-1)
+#define ERR_TX  (-2)
+#define ERR_LEN (-3)
+#define ERR_TO  (-4)
+#define ERR_CHK (-5)
+
+uint8_t rxBuf[32];
+
+int rs485txrx(uint8_t* pkt, size_t len, uint8_t* res, size_t resLen)
+{
+  if (len < 3)
+    return ERR_ERR;
+  pkt[len - 1] = 0xff;
+  for (size_t t = 0; t < (len - 1); t++)
+    pkt[len - 1] += pkt[t];
+  pkt[len - 1] &= 127;
+  pkt[0] |= 128;
+  dumpPkt("# TX", pkt, len);
+  digitalWrite(PIN_RS485ENA, HIGH);
+  digitalWrite(PIN_LED, blinkState);
+  blinkState = ((blinkState == LOW) ? HIGH : LOW);
+  Serial1.write(pkt, len);
+  Serial1.flush();
+  digitalWrite(PIN_RS485ENA, LOW);
+  if (pkt[0] == (ADDR_ALL | 128)) 
+  {
+    // ignore all bus data for max reply time
+    unsigned long ts0 = millis();
+    while (timeDiff(ts0, millis()) < REPLY_WAIT_MSEC)
+      Serial1.read();
+    return 0;
+  }
+  size_t rCnt = 0;
+  unsigned long ts0 = millis();
+  while ((timeDiff(ts0, millis()) < REPLY_WAIT_MSEC) && (rCnt < (len + resLen)))
+  {
+    int d = Serial1.read();
+    if (d < 0)
+      continue;
+    rxBuf[rCnt++] = d;
+  }
+  dumpPkt("# RX", rxBuf, rCnt);
+  if ((rCnt < len) || (memcmp(pkt, rxBuf, len) != 0))
+    return ERR_TX;
+  if (rCnt == len)
+    return ERR_TO;
+  if (rCnt < (len + resLen))
+    return ERR_LEN;
+  if (resLen < 2)
+    return ERR_ERR;
+  uint8_t chk = 0xff;
+  for (size_t t = 0; t < (resLen - 1); t++)
+    chk += rxBuf[len + t];
+  chk &= 127;
+  if (rxBuf[len + resLen - 1] != chk)
+    return ERR_CHK;
+  memcpy(res, rxBuf + len, resLen);
+  return resLen;
+}
+
+void setup()
+{
+  pinMode(PIN_LED, OUTPUT);
+  digitalWrite(PIN_LED, LOW);
+  pinMode(PIN_RS485ENA, OUTPUT);
+  digitalWrite(PIN_RS485ENA, LOW);
+  Serial.begin(115200);
+  Serial1.begin(115200);
+  delay(1000);
+  Serial.println("");
+  Serial.println("");
+  Serial.println("# RS485 bus interface v0.1 by KVP in 2024");
+  uint8_t cmd[3];
+  cmd[0] = ADDR_ALL;
+  cmd[1] = CMD_STOP_ALL;
+  uint8_t res[2];
+  rs485txrx(cmd, 3, res, 2);
+  Serial.println("READY");
+}
+
+bool strStartsWith(const char* s, const char* d, int l)
+{
+  return(strncmp(s, d, l) == 0);
+}
+
+void sendError(const char* errs, const char* cmd)
+{
+  Serial.print(errs);
+  Serial.print(" ");
+  Serial.println(cmd);
+}
+
+void sendResult(int res)
+{
+  switch (res)
+  {
+    case ERR_ERR:
+      Serial.println("Error");
+      break;
+    case ERR_LEN:
+      Serial.println("Elen");
+      break;
+    case ERR_TO:
+      Serial.println("Eto");
+      break;
+    case ERR_TX:
+      Serial.println("Etx");
+      break;
+    case ERR_CHK:
+      Serial.println("Echk");
+      break;
+    default:
+      Serial.print("OK ");
+      Serial.println(res, HEX);
+      break;
+  }
+}
+
+static const char* ErrorOk = "OK";
+static const char* ErrorSyntax = "Esyn";
+static const char* ErrorValue = "Eval";
+
+void commandIn(const char* cmd)
+{
+  uint8_t pkt[8];
+  uint8_t res[16];
+  int rLen;
+  if (strStartsWith(cmd, "help", 4))
+  {
+    Serial.println("# Commands:");
+    Serial.println("# help : this help text");
+    Serial.println("# signal set : SS <address7 (hex)> <uint32_t data (hex)>");
+    //Serial.println("# motor.set <address7 (hex)> <port (0-3)> <speed (-255...255, +/-0..100%)> : set motor output speed");
+    //Serial.println("# motor.pulse <address7 (hex)> <port (0-3)> <direction (-1..1)> <pulse (0..127 x10 msec, 1/100 second)> : pulse motor output");
+    Serial.println("# sensor get : SG <address7 (hex)> : get sensor data -> 'OK <val0> <min0> <max0> <val1> <min1> <max1> <val2> <min2> <max2> <val3> <min3> <max3>");
+    Serial.println("# stop all : SA");
+    Serial.println("# pnp list : PL -> 'info <addr> <type> <status>' *N, 'OK'");
+    Serial.println("# pnp get : PG <address7 (hex)> -> 'OK <type> <status>'");
+    Serial.println("# errors: OK, Esyn (syntax), Eval (value), Elen (length), Eto (timeout), Etx (transmit), Echk (checksum)");
+    Serial.println(ErrorOk);
+    return;
+  }
+  if (strStartsWith(cmd, "SA", 2))
+  {
+    pkt[0] = ADDR_ALL;
+    pkt[1] = CMD_STOP_ALL;
+    rs485txrx(pkt, 3, res, 2);
+    Serial.println(ErrorOk);
+  }
+  if (strStartsWith(cmd, "SS ", 3))
+  {
+    unsigned addr = 0;
+    unsigned long data = 0;
+    if (sscanf(cmd + 3, "%02x %08lx", &addr, &data) != 2)
+    {
+      sendError(ErrorSyntax, cmd);
+      return;
+    }
+    pkt[0] = addr;
+    pkt[1] = CMD_SIGNAL_SET;
+    pkt[2] = data & 127;
+    pkt[3] = (data >> 7) & 127;
+    pkt[4] = (data >> 14) & 127;
+    pkt[5] = (data >> 21) & 127;
+    pkt[6] = (data >> 28) & 15;
+    rLen = rs485txrx(pkt, 8, res, 2);
+    if (rLen < 0)
+      sendResult(rLen);
+    sendResult(res[0]);
+    return;
+  }
+  if (strStartsWith(cmd, "SG ", 3))
+  {
+    unsigned addr = 0;
+    if (sscanf(cmd + 3, "%02x", &addr) != 1)
+    {
+      sendError(ErrorSyntax, cmd);
+      return;
+    }
+    pkt[0] = addr;
+    pkt[1] = CMD_SENSOR_GET;
+    rLen = rs485txrx(pkt, 2, res, 13);
+    if (rLen < 0)
+      sendResult(rLen);
+    Serial.print("OK");
+    for (size_t t = 0; t < 12; t++)
+    {
+      Serial.print(" ");
+      Serial.print(res[t], HEX);
+    }
+    Serial.println();
+    return;
+  }
+  if (strStartsWith(cmd, "PL", 2))
+  {
+    for (int addr = 1; addr < 127; addr++)
+    {
+      pkt[0] = addr;
+      pkt[1] = CMD_INFO;
+      rLen = rs485txrx(pkt, 3, res, 3);
+      if (rLen < 0)
+        sendResult(rLen);
+      Serial.print("info ");
+      Serial.print(addr);
+      Serial.print(" ");
+      Serial.print(res[0], HEX);
+      Serial.print(" ");
+      Serial.println(res[1], HEX);
+    }
+    Serial.println(ErrorOk);
+  }
+  if (strStartsWith(cmd, "PG ", 3))
+  {
+    unsigned addr = 0;
+    if (sscanf(cmd + 3, "%02x", &addr) != 1)
+    {
+      sendError(ErrorSyntax, cmd);
+      return;
+    }
+    pkt[0] = addr;
+    pkt[1] = CMD_INFO;
+    rLen = rs485txrx(pkt, 3, res, 3);
+    if (rLen < 0)
+      sendResult(rLen);
+    Serial.print(ErrorOk);
+    Serial.print(res[0], HEX);
+    Serial.print(" ");
+    Serial.println(res[1], HEX);
+  }
+}
+
+static char cmdBuf[256];
+static size_t cmdBufLen = 0;
+
+void loop()
+{
+  int ch = Serial.read();
+  if (ch > 0)
+  {
+    switch (ch)
+    {
+      case '\r':
+        break;
+      case '\n':
+        cmdBuf[cmdBufLen] = 0;
+        if ((cmdBufLen > 0) && (cmdBuf[0] != '#'))
+          commandIn(cmdBuf);
+        cmdBufLen = 0;
+        break;
+      default:
+        if (cmdBufLen < (sizeof(cmdBuf) - 1))
+          cmdBuf[cmdBufLen++] = ch;
+        break;
+    }
+  }
+}

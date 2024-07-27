@@ -1,0 +1,29 @@
+pnp get:     address command checksum                                  -> type status checksum
+signal set:  address command 5bytes(leds) checksum                     -> status checksum
+motor set:   address command 4bytes(s0,s1,s2,s3) checksum              -> status checksum
+motor pulse: address command 8bytes(s0,t0,s1,t1,s2,t2,s3,t3) checksum  -> status checksum
+sensor get:  address command checksum                                  -> 13bytes(status,[val,min,max]*4) checksum
+stop:        address command checksum                                  -> status checksum
+stop all:    address command checksum
+
+status bits:
+0 : uninitialized (all)
+1 : channel0 active (motor driver and sensor)
+2 : channel1 active (motor driver and sensor)
+3 : channel2 active (motor driver and sensor)
+4 : channel3 active (motor driver and sensor)
+6 : error (all)
+
+pnplist    | PL                -> info aa tt ss\n...\n OK
+pnpget     | PG aa             -> OK tt ss
+signalset  | SS aa vvvv vvvv   -> OK ss
+motorset   | MS aa s0 s1 s2 s3 -> OK ss
+motorpulse | MP aa c s t       -> OK ss
+sensorget  | SG aa             -> OK vv ll hh vv ll hh vv ll hh vv ll hh
+stopall    | SA                ->
+help       		       -> help text
+
+0123456789ABCDEF0123456789ABCDEF
+0123456 789ABCD EF01234 56789AB CDEF
+<SS 42 FFFFFFFF
+>00
