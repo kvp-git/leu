@@ -111,7 +111,7 @@ void setup()
 void signalSet(const uint8_t* data)
 {
   signals[0] = ((unsigned)data[0]) | (((unsigned)data[1]) << 7) | ((((unsigned)data[2]) & 3) << 14);
-  signals[1] = ((((unsigned)data[3]) >> 2) & 31) | (((unsigned)data[4]) << 5) | ((((unsigned)data[5]) & 15) << 12);
+  signals[1] = ((((unsigned)data[2]) >> 2) & 31) | (((unsigned)data[3]) << 5) | ((((unsigned)data[4]) & 15) << 12);
 }
 
 void motorSet(const uint8_t* data)
