@@ -121,6 +121,13 @@ bool strStartsWith(const char* s, const char* d, int l)
   return(strncmp(s, d, l) == 0);
 }
 
+void printHex(uint8_t v)
+{
+  Serial.print(" ");
+  Serial.print((v >> 8) & 255, HEX);
+  Serial.print(v & 255, HEX);
+}
+
 void sendError(const char* errs, const char* cmd)
 {
   Serial.print(errs);
@@ -133,30 +140,31 @@ void sendResult(int res)
   switch (res)
   {
     case ERR_ERR:
-      Serial.println("Error");
+      Serial.println("ERROR");
       break;
     case ERR_LEN:
-      Serial.println("Elen");
+      Serial.println("ELEN");
       break;
     case ERR_TO:
-      Serial.println("Eto");
+      Serial.println("ETO");
       break;
     case ERR_TX:
-      Serial.println("Etx");
+      Serial.println("ETX");
       break;
     case ERR_CHK:
-      Serial.println("Echk");
+      Serial.println("ECHK");
       break;
     default:
-      Serial.print("OK ");
-      Serial.println(res, HEX);
+      Serial.print("OK");
+      printHex(res);
+      Serial.println("");
       break;
   }
 }
 
 static const char* ErrorOk = "OK";
-static const char* ErrorSyntax = "Esyn";
-static const char* ErrorValue = "Eval";
+static const char* ErrorSyntax = "ESYN";
+static const char* ErrorValue = "EVAL";
 
 void commandIn(const char* cmd)
 {
@@ -204,7 +212,8 @@ void commandIn(const char* cmd)
     rLen = rs485txrx(pkt, 8, res, 2);
     if (rLen < 0)
       sendResult(rLen);
-    sendResult(res[0]);
+    else
+      sendResult(res[0]);
     return;
   }
   if (strStartsWith(cmd, "SG ", 3))
@@ -240,10 +249,8 @@ void commandIn(const char* cmd)
         sendResult(rLen);
       Serial.print("info ");
       Serial.print(addr);
-      Serial.print(" ");
-      Serial.print(res[0], HEX);
-      Serial.print(" ");
-      Serial.println(res[1], HEX);
+      printHex(res[0]);
+      printHex(res[1]);
     }
     Serial.println(ErrorOk);
   }
@@ -261,9 +268,9 @@ void commandIn(const char* cmd)
     if (rLen < 0)
       sendResult(rLen);
     Serial.print(ErrorOk);
-    Serial.print(res[0], HEX);
-    Serial.print(" ");
-    Serial.println(res[1], HEX);
+    printHex(res[0]);
+    printHex(res[1]);
+    Serial.println("");
   }
 }
 

@@ -99,6 +99,13 @@ void setup()
       }
       break;
   }
+  /*
+  digitalWrite(PIN_TXE, HIGH);
+  uint8_t pkt[2] = {0x55, 0xaa};
+  Serial.write(pkt, 2);
+  Serial.flush();
+  digitalWrite(PIN_TXE, LOW);
+  */
 }
 
 void signalSet(const uint8_t* data)
@@ -278,7 +285,7 @@ void dataIn(uint8_t data)
   switch (state)
   {
     case STATE_ADDRESS:
-      if ((data == ADDRESS) || (data == ADDR_ALL))
+      if ((data == (ADDRESS | 128)) || (data == (ADDR_ALL | 128)))
         state = STATE_COMMAND;
       else
         state = STATE_IDLE;     
@@ -327,26 +334,31 @@ void dataIn(uint8_t data)
       return;
     case STATE_SIGNAL_SET:
       if (pktCnt == 8)
+      {
         cmdIn(pktBuf, pktCnt);
-      state = STATE_IDLE;
+        state = STATE_IDLE;
+      }
       return;
     case STATE_MOTOR_SET:
       if (pktCnt == 7)
+      {
         cmdIn(pktBuf, pktCnt);
-      state = STATE_IDLE;
+        state = STATE_IDLE;
+      }
       return;
     case STATE_MOTOR_PULSE:
       if (pktCnt == 11)
+      {
         cmdIn(pktBuf, pktCnt);
-      state = STATE_IDLE;
+        state = STATE_IDLE;
+      }
       return;
     case STATE_SENSOR_GET:
       cmdIn(pktBuf, pktCnt);
       state = STATE_IDLE;
       return;
     case STATE_STOP_ALL:
-      if (pktCnt == 7)
-        cmdIn(pktBuf, pktCnt);
+      cmdIn(pktBuf, pktCnt);
       state = STATE_IDLE;
       return;
     default:
