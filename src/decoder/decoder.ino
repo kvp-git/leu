@@ -1,8 +1,8 @@
 
 // decoder address (1..126)
-#define ADDRESS  (0x42)
+#define ADDRESS  (0x44)
 // decoder type
-#define DECODER_TYPE DECODER_SIGNAL
+#define DECODER_TYPE DECODER_MOTOR
 
 enum DECODER_TYPES
 {
@@ -46,6 +46,10 @@ enum STATES
 #define FLAG_MOTOR3 (16)
 #define FLAG_ERROR  (64)
 
+#define SIGNAL_NUM (16)
+#define SENSOR_NUM (4)
+#define MOTOR_NUM (3)
+
 int state = STATE_IDLE;
 unsigned long ts0 = 0;
 unsigned statusFlags = FLAG_RESET;
@@ -54,8 +58,9 @@ unsigned pktCnt = 0;
 
 uint16_t signals[2] = {0x5555, 0xaaaa};
 unsigned signalsCnt = 0;
-int8_t motors[4] = {};
-uint8_t sensors[4 * 3] = {};
+unsigned long int motorTimeouts[MOTOR_NUM];
+uint8_t motors[MOTOR_NUM];
+uint8_t sensors[SENSOR_NUM * 3] = {};
 unsigned sensorCnt = 0;
 
 unsigned long timeDiff(unsigned long t0, unsigned long t1)
@@ -67,9 +72,9 @@ unsigned long timeDiff(unsigned long t0, unsigned long t1)
 
 #define PIN_TXE (13)
 
-int signalPins[16] = { 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, A0, A1, A2, A3 };
-int pwmPins[6] = { 3, 5, 6, 9, 10, 11 };
-int analogPins[4] = { A0, A1, A2, A3};
+int signalPins[SIGNAL_NUM] = { 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, A0, A1, A2, A3 };
+int pwmPins[MOTOR_NUM * 2] = { 3, 5, 6, 9, 10, 11 };
+int analogPins[SENSOR_NUM] = { A0, A1, A2, A3};
 
 void setup()
 {
@@ -79,25 +84,37 @@ void setup()
   switch (DECODER_TYPE)
   {
     case DECODER_SIGNAL:
+    {
       for (int t = 0; t < 16; t++)
       {
         pinMode(signalPins[t], OUTPUT);
         digitalWrite(signalPins[t], LOW);
       }
       break;
+    }
     case DECODER_MOTOR:
-      for (int t = 0; t < 6; t++)
+    {
+      for (int t = 0; t < MOTOR_NUM; t++)
       {
         pinMode(pwmPins[t], OUTPUT);
         digitalWrite(pwmPins[t], LOW);
       }
+      TCCR1B = TCCR0B;
+      TCCR2B = TCCR0B;
+      /*
+      uint8_t pkt[3] = {16, 16, 16};
+      motorSet(pkt);
+      */
       break;
+    }
     case DECODER_SENSOR:
+    {
       for (int t = 0; t < 4; t++)
       {
         pinMode(analogPins[t], INPUT);
       }
       break;
+    }
   }
   /*
   digitalWrite(PIN_TXE, HIGH);
@@ -116,28 +133,29 @@ void signalSet(const uint8_t* data)
 
 void motorSet(const uint8_t* data)
 {
-  for (int t = 0; t < 3; t++)
+  for (int t = 0; t < MOTOR_NUM; t++)
   {
-    int8_t v = (int8_t)data[t];
+    uint8_t v = data[t];
     if (v == motors[t])
       continue;
     motors[t] = v;
-    if (v < 0)
-    {
-      analogWrite(pwmPins[t * 2], 0);
-      analogWrite(pwmPins[t * 2 + 1], 0);
-      analogWrite(pwmPins[t * 2 + 1], v * -2);
-    } else if (v > 0)
-    {
-      analogWrite(pwmPins[t * 2], 0);
-      analogWrite(pwmPins[t * 2 + 1], 0);
-      analogWrite(pwmPins[t * 2], v * 2);
-    } else
+    uint8_t s = (v & 63) << 2;
+    if (v == 0)
     {
       analogWrite(pwmPins[t * 2], 0);
       analogWrite(pwmPins[t * 2 + 1], 0);
       //digitalWrite(pwmPins[t * 2], LOW);
-      //digitalWrite(pwmPins[t * 2 + 1], LOW);
+      //digitalWrite(pwmPins[t * 2 + 1], LOW); 
+    } else if ((v & 64) != 0)
+    {
+      analogWrite(pwmPins[t * 2], 0);
+      analogWrite(pwmPins[t * 2 + 1], 0);
+      analogWrite(pwmPins[t * 2 + 1], s);
+    } else
+    {
+      analogWrite(pwmPins[t * 2], 0);
+      analogWrite(pwmPins[t * 2 + 1], 0);
+      analogWrite(pwmPins[t * 2], s);
     }
     statusFlags |= (1 << (t + 1));
   }
@@ -384,7 +402,17 @@ void loop()
       }
       break;
     case DECODER_MOTOR:
-      // TODO!!!
+      /*
+      digitalWrite(PIN_TXE, HIGH);
+      Serial.print ("HELLO ");
+      Serial.println(ts);
+      digitalWrite(PIN_TXE, LOW);
+      delay(1000);
+      Serial.println(TCCR0B);
+      Serial.println(TCCR1B);
+      Serial.println(TCCR2B);
+      Serial.println("");
+      */
       break;
     case DECODER_SENSOR:
       if (timeDiff(ts0, ts) >= SENSOR_POLL_MSEC)
@@ -395,6 +423,9 @@ void loop()
           // 4095 -> 127
           uint8_t data = v >> 5;
           unsigned idx = (sensorCnt >> 1) * 3;
+          statusFlags |= (1 << (idx + 1));
+          if ((statusFlags & (2 | 4 | 8 | 16)) == (2 | 4 | 8 | 16))
+            statusFlags = ~FLAG_RESET;
           sensors[idx] = data;
           if (sensors[idx + 1] > data)
             sensors[idx + 1] = data;
@@ -404,23 +435,6 @@ void loop()
         sensorCnt = (sensorCnt + 1) & 7;
         ts0 = ts;
       }
-      // TODO!!!
       break;
   }
- /*
-  if (timeDiff(ts0, ts) > TICK)
-  {
-    switch (DEOCDER_TYPE)
-    {
-      case DECODER_SIGNAL:
-        tickSignal();
-        break;
-      case DECODER_MOTOR:
-        tickMotor();
-        break;
-      case DECODER_SENSOR:
-        tickSensor();
-        break;
-    }
-*/
 }

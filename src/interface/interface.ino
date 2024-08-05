@@ -176,7 +176,7 @@ void commandIn(const char* cmd)
     Serial.println("# Commands:");
     Serial.println("# help : this help text");
     Serial.println("# signal set : SS <address7 (hex)> <uint32_t data (hex)>");
-    //Serial.println("# motor.set <address7 (hex)> <port (0-3)> <speed (-255...255, +/-0..100%)> : set motor output speed");
+    Serial.println("# motor.set : MS  <address7 (hex)> <speed (-63...63, +/-0..100%)> x4 : set motor output speed");
     //Serial.println("# motor.pulse <address7 (hex)> <port (0-3)> <direction (-1..1)> <pulse (0..127 x10 msec, 1/100 second)> : pulse motor output");
     Serial.println("# sensor get : SG <address7 (hex)> : get sensor data -> 'OK <val0> <min0> <max0> <val1> <min1> <max1> <val2> <min2> <max2> <val3> <min3> <max3>");
     Serial.println("# stop all : SA");
@@ -215,6 +215,45 @@ void commandIn(const char* cmd)
     else
       sendResult(res[0]);
     return;
+  }
+  if (strStartsWith(cmd, "MS ", 3))
+  {
+    unsigned addr = 0;
+    int m[4];
+    if (sscanf(cmd + 3, "%02x %d %d %d %d", &addr, m + 0, m + 1, m + 2, m + 3) != 5)
+    {
+      sendError(ErrorSyntax, cmd);
+      return;
+    }
+    for (int t = 0; t < 4; t++)
+    {
+      if ((m[t] > 63) || (m[t] < -63))
+      {
+        sendError(ErrorValue, cmd);
+        return;
+      }
+    }
+    pkt[0] = addr;
+    pkt[1] = CMD_MOTOR_SET;
+    for (int t = 0; t < 4; t++)
+    {
+      if (m[t] < 0)
+        pkt[2 + t] = (-m[t]) | 64;
+      else
+        pkt[2 + t] = m[t];
+      /*
+      int v;
+      if ((pkt[2 + t] & 64) != 0)
+        v = -((pkt[2 + t] & 63) << 2);
+      else
+        v = (pkt[2 + t] & 63) << 2;
+      */
+    }
+    rLen = rs485txrx(pkt, 7, res, 2);
+    if (rLen < 0)
+      sendResult(rLen);
+    else
+      sendResult(res[0]);
   }
   if (strStartsWith(cmd, "SG ", 3))
   {
