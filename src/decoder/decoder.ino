@@ -9,6 +9,7 @@ enum DECODER_TYPES
   DECODER_SIGNAL = 1,
   DECODER_MOTOR = 2,
   DECODER_SENSOR = 3,
+  DECODER_PULSE = 4,
 };
 
 #define ADDR_ALL (0x7f)
@@ -31,7 +32,7 @@ enum STATES
   STATE_INFO,
   STATE_SIGNAL_SET,
   STATE_MOTOR_SET,
-  STATE_MOTOR_PULSE,
+  STATE_PULSE_SET,
   STATE_SENSOR_GET,
   STATE_STOP_ALL,
 };
@@ -48,7 +49,8 @@ enum STATES
 
 #define SIGNAL_NUM (16)
 #define SENSOR_NUM (4)
-#define MOTOR_NUM (3)
+#define MOTOR_NUM  (3)
+#define PULSE_NUM  (4)
 
 int state = STATE_IDLE;
 unsigned long ts0 = 0;
@@ -75,6 +77,7 @@ unsigned long timeDiff(unsigned long t0, unsigned long t1)
 int signalPins[SIGNAL_NUM] = { 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, A0, A1, A2, A3 };
 int pwmPins[MOTOR_NUM * 2] = { 3, 5, 6, 9, 10, 11 };
 int analogPins[SENSOR_NUM] = { A0, A1, A2, A3};
+int pulsePins[PULSE_NUM * 2] = { 3, 5, 6, 9, 10, 11 , A1, A2};
 
 void setup()
 {
@@ -85,7 +88,7 @@ void setup()
   {
     case DECODER_SIGNAL:
     {
-      for (int t = 0; t < 16; t++)
+      for (int t = 0; t < SIGNAL_NUM; t++)
       {
         pinMode(signalPins[t], OUTPUT);
         digitalWrite(signalPins[t], LOW);
@@ -99,8 +102,41 @@ void setup()
         pinMode(pwmPins[t], OUTPUT);
         digitalWrite(pwmPins[t], LOW);
       }
-      TCCR1B = TCCR0B;
-      TCCR2B = TCCR0B;
+/*
+timer 0 (controls pin 13, 4);
+timer 1 (controls pin 12, 11);
+timer 2 (controls pin 10, 9);
+timer 3 (controls pin 5, 3, 2);
+timer 4 (controls pin 8, 7, 6);
+
+prescaler = 1 ---> PWM frequency is 31000 Hz
+prescaler = 2 ---> PWM frequency is 4000 Hz
+prescaler = 3 ---> PWM frequency is 490 Hz (default value)
+prescaler = 4 ---> PWM frequency is 120 Hz
+prescaler = 5 ---> PWM frequency is 30 Hz
+prescaler = 6 ---> PWM frequency is <20 Hz
+(prescalers equal t 0 or 7 are useless).
+
+Those prescaler values are good for all timers (TCCR1B, TCCR2B, TCCR3B, TCCR4B) except for timer 0 (TCCR0B).
+In this case the values are:
+
+prescaler = 1 ---> PWM frequency is 62000 Hz
+prescaler = 2 ---> PWM frequency is 7800 Hz
+prescaler = 3 ---> PWM frequency is 980 Hz (default value)
+prescaler = 4 ---> PWM frequency is 250 Hz
+prescaler = 5 ---> PWM frequency is 60 Hz
+prescaler = 6 ---> PWM frequency is <20 Hz
+
+Note that timer 0 is the one on which rely all time functions in Arduino: i.e., if you change this timer, 
+function like delay() or millis() will continue to work but at a different timescale (quicker or slower).
+
+The value of variable TCCRnB, where 'n' is the number of register.
+The TCCRnB is a 8 bit number. The first three bits (from right to left!) are called CS02, CS01, CS00, and 
+they are the bits we have to change.
+*/
+      TCCR0B = (TCCR0B & (~7)) | 2;
+      TCCR1B = (TCCR1B & (~7)) | 2;
+      TCCR2B = (TCCR2B & (~7)) | 2;
       /*
       uint8_t pkt[3] = {16, 16, 16};
       motorSet(pkt);
@@ -109,10 +145,18 @@ void setup()
     }
     case DECODER_SENSOR:
     {
-      for (int t = 0; t < 4; t++)
+      for (int t = 0; t < SENSOR_NUM; t++)
+        pinMode(analogPins[t], INPUT_PULLUP);
+      break;
+    }
+    case DECODER_PULSE:
+    {
+      for (int t = 0; t < PULSE_NUM * 2; t++)
       {
-        pinMode(analogPins[t], INPUT);
+        pinMode(pulsePins[t], OUTPUT);
+        digitalWrite(pulsePins[t], LOW);
       }
+      
       break;
     }
   }
@@ -161,20 +205,30 @@ void motorSet(const uint8_t* data)
   }
 }
 
+// _wwwwwww _DWWWWWW -> D, WWWWWWwwwwwwww
 void motorPulse(const uint8_t* data)
 {
+  int16_t v[PULSE_NUM];
+  for (int t = 0; t < PULSE_NUM; t++)
+  {
+    v[t] = ((unsigned)(data[t * 2] & 127)) | (((unsigned)(data[t * 2 + 1] & 63)) << 7);
+    v[t] *= ((data[t * 2] & 64) != 0) ? -1 : 1;
+  }
   // TODO!!!
 }
 
 void signalOut(unsigned aspects)
 {
-  for (size_t t = 0; t < 16; t++)
+  for (size_t t = 0; t < SIGNAL_NUM; t++)
     digitalWrite(signalPins[t], ((aspects & (1 << t)) == 0) ? LOW : HIGH);
 }
 
 void pktSend(uint8_t* pkt, size_t len)
 {
-  delay(10); // TODO!!! check this
+  if (DECODER_TYPE == DECODER_MOTOR)
+    delay(10*7); // TODO!!! clean this up
+  else
+    delay(10);
   unsigned chk = 0xff;
   if (len < 1)
     return;
@@ -248,9 +302,9 @@ bool cmdIn(const uint8_t* pkt, size_t len)
         break;
       uint8_t res[14];
       res[0] = statusFlags;
-      for (size_t t = 0; t < (4 * 3); t++)
+      for (size_t t = 0; t < (SENSOR_NUM * 3); t++)
         res[1 + t] = sensors[t];
-      for (size_t t = 0; t < 4; t++) // reset min max
+      for (size_t t = 0; t < SENSOR_NUM; t++) // reset min max
       {
         sensors[t * 3 + 1] = sensors[t * 3];
         sensors[t * 3 + 2] = sensors[t * 3];
@@ -264,15 +318,18 @@ bool cmdIn(const uint8_t* pkt, size_t len)
         case DECODER_SIGNAL:
           signals[0] = 0;
           signals[1] = 0;
-          for (int t = 0; t < 16; t++)
+          for (int t = 0; t < SIGNAL_NUM; t++)
             digitalWrite(signalPins[t], LOW);
           break;
         case DECODER_MOTOR:
-          // TODO!!!
-          for (int t = 0; t < 6; t++)
+          for (int t = 0; t < MOTOR_NUM; t++)
             digitalWrite(pwmPins[t], LOW);
           break;
         case DECODER_SENSOR:
+          break;
+        case DECODER_PULSE:
+          for (int t = 0; t < PULSE_NUM * 2; t++)
+            digitalWrite(pulsePins[t], LOW);
           break;
       }
       statusFlags = FLAG_RESET;
@@ -327,8 +384,8 @@ void dataIn(uint8_t data)
             state = STATE_IDLE;
           return;
         case CMD_MOTOR_PULSE:
-          if (DECODER_TYPE == DECODER_MOTOR)
-            state = STATE_MOTOR_PULSE;
+          if (DECODER_TYPE == DECODER_PULSE)
+            state = STATE_PULSE_SET;
           else
             state = STATE_IDLE;
           return;
@@ -364,7 +421,7 @@ void dataIn(uint8_t data)
         state = STATE_IDLE;
       }
       return;
-    case STATE_MOTOR_PULSE:
+    case STATE_PULSE_SET:
       if (pktCnt == 11)
       {
         cmdIn(pktBuf, pktCnt);
