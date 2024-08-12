@@ -185,14 +185,14 @@ void commandIn(const char* cmd)
     Serial.println("# errors: OK, Esyn (syntax), Eval (value), Elen (length), Eto (timeout), Etx (transmit), Echk (checksum)");
     Serial.println(ErrorOk);
     return;
-  }
+  } else
   if (strStartsWith(cmd, "SA", 2))
   {
     pkt[0] = ADDR_ALL;
     pkt[1] = CMD_STOP_ALL;
     rs485txrx(pkt, 3, res, 2);
     Serial.println(ErrorOk);
-  }
+  } else
   if (strStartsWith(cmd, "SS ", 3))
   {
     unsigned addr = 0;
@@ -215,7 +215,7 @@ void commandIn(const char* cmd)
     else
       sendResult(res[0]);
     return;
-  }
+  } else
   if (strStartsWith(cmd, "MS ", 3))
   {
     unsigned addr = 0;
@@ -254,7 +254,53 @@ void commandIn(const char* cmd)
       sendResult(rLen);
     else
       sendResult(res[0]);
-  }
+  } else
+  if (strStartsWith(cmd, "MP ", 3))
+  {
+    unsigned addr = 0;
+    int m[4];
+    if (sscanf(cmd + 3, "%02x %d %d %d %d", &addr, m + 0, m + 1, m + 2, m + 3) != 5)
+    {
+      sendError(ErrorSyntax, cmd);
+      return;
+    }
+    for (int t = 0; t < 4; t++)
+    {
+      if ((m[t] > 8191) || (m[t] < -8191))
+      {
+        sendError(ErrorValue, cmd);
+        return;
+      }
+    }
+    pkt[0] = addr;
+    pkt[1] = CMD_MOTOR_PULSE;
+    for (int t = 0; t < 4; t++)
+    {
+      if (m[t] < 0)
+      {
+        unsigned d = -m[t];
+        pkt[2 + t] = d & 127;
+        pkt[2 + t + 1] = ((d >> 7) & 63) | 64;
+      } else
+      {
+        unsigned d = m[t];
+        pkt[2 + t] = d & 127;
+        pkt[2 + t + 1] = (d >> 7) & 63;
+      }
+      /*
+      int v;
+      if ((pkt[2 + t] & 64) != 0)
+        v = -((pkt[2 + t] & 63) << 2);
+      else
+        v = (pkt[2 + t] & 63) << 2;
+      */
+    }
+    rLen = rs485txrx(pkt, 11, res, 2);
+    if (rLen < 0)
+      sendResult(rLen);
+    else
+      sendResult(res[0]);
+  } else
   if (strStartsWith(cmd, "SG ", 3))
   {
     unsigned addr = 0;
@@ -276,7 +322,7 @@ void commandIn(const char* cmd)
     }
     Serial.println();
     return;
-  }
+  } else
   if (strStartsWith(cmd, "PL", 2))
   {
     for (int addr = 1; addr < 127; addr++)
@@ -292,7 +338,7 @@ void commandIn(const char* cmd)
       printHex(res[1]);
     }
     Serial.println(ErrorOk);
-  }
+  } else
   if (strStartsWith(cmd, "PG ", 3))
   {
     unsigned addr = 0;

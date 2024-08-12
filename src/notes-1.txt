@@ -1,10 +1,13 @@
 pnp get:     address command checksum                                  -> type status checksum
 signal set:  address command 5bytes(leds) checksum                     -> status checksum
 motor set:   address command 4bytes(s0,s1,s2,s3) checksum              -> status checksum
-motor pulse: address command 8bytes(s0,t0,s1,t1,s2,t2,s3,t3) checksum  -> status checksum
+motor pulse: address command 8bytes(t0lh,t1lh,t2lh,t3lh) checksum      -> status checksum
 sensor get:  address command checksum                                  -> 13bytes(status,[val,min,max]*4) checksum
 stop:        address command checksum                                  -> status checksum
 stop all:    address command checksum
+
+s*: 0x0Dssssss : D=direction, s=speed
+t*lh: 0x0ddddddd 0x0Ddddddd : d=delay (low/high bytes), D=direction
 
 status bits:
 0 : uninitialized (all)
@@ -18,7 +21,7 @@ pnplist    | PL                -> info aa tt ss\n...\n OK
 pnpget     | PG aa             -> OK tt ss
 signalset  | SS aa vvvv vvvv   -> OK ss
 motorset   | MS aa s0 s1 s2 s3 -> OK ss
-motorpulse | MP aa c s t       -> OK ss
+motorpulse | MP aa t0 t1 t2 t3 -> OK ss
 sensorget  | SG aa             -> OK vv ll hh vv ll hh vv ll hh vv ll hh
 stopall    | SA                ->
 help       		       -> help text
