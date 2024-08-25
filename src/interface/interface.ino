@@ -124,8 +124,8 @@ bool strStartsWith(const char* s, const char* d, int l)
 void printHex(uint8_t v)
 {
   Serial.print(" ");
-  Serial.print((v >> 8) & 255, HEX);
-  Serial.print(v & 255, HEX);
+  Serial.print((v >> 4) & 15, HEX);
+  Serial.print(v & 15, HEX);
 }
 
 void sendError(const char* errs, const char* cmd)
@@ -311,11 +311,15 @@ void commandIn(const char* cmd)
     }
     pkt[0] = addr;
     pkt[1] = CMD_SENSOR_GET;
-    rLen = rs485txrx(pkt, 2, res, 13);
+    rLen = rs485txrx(pkt, 3, res, 14);
     if (rLen < 0)
+    {
+              Serial.println(rLen);
       sendResult(rLen);
+      return;
+    }
     Serial.print("OK");
-    for (size_t t = 0; t < 12; t++)
+    for (size_t t = 0; t < (1+4*3); t++)
     {
       Serial.print(" ");
       Serial.print(res[t], HEX);
@@ -330,12 +334,19 @@ void commandIn(const char* cmd)
       pkt[0] = addr;
       pkt[1] = CMD_INFO;
       rLen = rs485txrx(pkt, 3, res, 3);
+      Serial.print("info");
+      printHex(addr);
+      Serial.print(" ");
       if (rLen < 0)
+      {
         sendResult(rLen);
-      Serial.print("info ");
-      Serial.print(addr);
-      printHex(res[0]);
-      printHex(res[1]);
+      } else
+      {
+        Serial.print("OK");
+        printHex(res[0]);
+        printHex(res[1]);
+        Serial.println("");
+      }
     }
     Serial.println(ErrorOk);
   } else

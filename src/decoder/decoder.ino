@@ -1,8 +1,8 @@
 
 // decoder address (1..126)
-#define ADDRESS  (0x44)
+#define ADDRESS  (0x42)
 // decoder type
-#define DECODER_TYPE DECODER_MOTOR
+#define DECODER_TYPE DECODER_SIGNAL
 
 enum DECODER_TYPES
 {
@@ -76,8 +76,8 @@ unsigned long timeDiff(unsigned long t0, unsigned long t1)
 
 int signalPins[SIGNAL_NUM] = { 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, A0, A1, A2, A3 };
 int pwmPins[MOTOR_NUM * 2] = { 3, 5, 6, 9, 10, 11 };
-int analogPins[SENSOR_NUM] = { A0, A1, A2, A3};
-int pulsePins[PULSE_NUM * 2] = { 3, 5, 6, 9, 10, 11 , A1, A2};
+int analogPins[SENSOR_NUM] = { A0, A1, A2, A3 };
+int pulsePins[PULSE_NUM * 2] = { 3, 5, 6, 9, 10, 11 , A1, A2 };
 
 void setup()
 {
@@ -390,7 +390,7 @@ void dataIn(uint8_t data)
             state = STATE_IDLE;
           return;
         case CMD_SENSOR_GET:
-          if (DECODER_TYPE == DECODER_MOTOR)
+          if (DECODER_TYPE == DECODER_SENSOR)
             state = STATE_SENSOR_GET;
           else
             state = STATE_IDLE;
@@ -474,11 +474,11 @@ void loop()
     case DECODER_SENSOR:
       if (timeDiff(ts0, ts) >= SENSOR_POLL_MSEC)
       {
-        int v = analogRead(analogPins[sensorCnt / 2]);
+        int v = analogRead(analogPins[sensorCnt >> 1]);
         if ((sensorCnt & 1) == 1) // save every 2nd read (input switch lag workaround)
         {
           // 4095 -> 127
-          uint8_t data = v >> 5;
+          uint8_t data = (v >> 5) & 127;
           unsigned idx = (sensorCnt >> 1) * 3;
           statusFlags |= (1 << (idx + 1));
           if ((statusFlags & (2 | 4 | 8 | 16)) == (2 | 4 | 8 | 16))
