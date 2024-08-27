@@ -1,15 +1,27 @@
+# Lineside Electronic Unit Python Interface by KVP
+
 import serial
 import threading
 from dataclasses import dataclass
 
 @dataclass
 class SerialPortDevice:
-    addr   : str
-    type   : int
-    status : int
+	addr    : str
+	type    : int
+	status  : int
+	signals : list
+	speeds  : list[int]
+	pulses  : list[int]
+	sensors : list[int]
+
+# DECODER_SIGNAL = 1,
+# DECODER_MOTOR = 2,
+# DECODER_SENSOR = 3,
+# DECODER_PULSE = 4,
 
 def serialPortWrite(command):
 	global serialPort
+	print("<" + command)
 	cmd = command + "\n"
 	serialPort.write(cmd.encode("iso-8859-2"))
 
@@ -22,8 +34,11 @@ def serialPortSendNext():
 		return
 	dev = serialPortMap[serialPortDevList[serialPortDevCnt]]
 	print("address=" + hex(dev.addr) + " type=" + hex(dev.type))
-	serialPortWrite("PG " + hex(dev.addr)[2:])
-	# TODO
+	#serialPortWrite("PG " + hex(dev.addr)[2:])
+	if (dev.type == 1):
+		serialPortWrite("SS " + hex(dev.addr)[2:] + " " + hex(dev.signals)[2:])
+	else:
+		serialPortWrite("PG " + hex(dev.addr)[2:])
 	serialPortDevCnt = (serialPortDevCnt + 1) % devLen
 
 def serialPortThread():
@@ -60,9 +75,8 @@ def serialPortThread():
 								addr = int(cmd[1], 16)
 								type = int(cmd[3], 16)
 								stat = int(cmd[4], 16)
-								print("address=0x" + cmd[2] + " type=0x" + cmd[3] + " status=0x" + cmd[4])
-								#print("    " + str(type) + " " + str(stat))
-								dev = SerialPortDevice(addr, type, stat)
+								print("address=" + hex(addr) + " type=" + hex(type) + " status=" + hex(stat))
+								dev = SerialPortDevice(addr, type, stat, 0, [0,0,0,0], [0,0,0,0], [0,0,0,0,0,0,0,0,0,0,0,0])
 								serialPortMap[addr] = dev
 								serialPortDevList.append(addr)
 					if (serialString.startswith("OK")):
@@ -96,3 +110,10 @@ def serialPortExit():
 
 def serialPortSendCommand(command):
 	pass # TODO!!!
+
+def signalSet(address, aspects):
+	global serialPortMap
+	if (not (address in serialPortMap)):
+		return
+	signal = serialPortMap[address]
+	signal.signals = aspects
