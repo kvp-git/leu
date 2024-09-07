@@ -1,8 +1,8 @@
 
 // decoder address (1..126)
-#define ADDRESS  (0x42)
+#define ADDRESS  (0x43)
 // decoder type
-#define DECODER_TYPE DECODER_SIGNAL
+#define DECODER_TYPE DECODER_PULSE
 
 enum DECODER_TYPES
 {
@@ -60,10 +60,14 @@ unsigned pktCnt = 0;
 
 uint16_t signals[2] = {0x5555, 0xaaaa};
 unsigned signalsCnt = 0;
-unsigned long int motorTimeouts[MOTOR_NUM];
-uint8_t motors[MOTOR_NUM];
+uint8_t motors[MOTOR_NUM] = {};
 uint8_t sensors[SENSOR_NUM * 3] = {};
 unsigned sensorCnt = 0;
+int8_t pulseDir[PULSE_NUM] = {};
+bool   pulseAct[PULSE_NUM] = {};
+unsigned long pulseStart[PULSE_NUM] = {};
+unsigned long pulseTime[PULSE_NUM] = {};
+
 
 unsigned long timeDiff(unsigned long t0, unsigned long t1)
 {
@@ -77,7 +81,7 @@ unsigned long timeDiff(unsigned long t0, unsigned long t1)
 int signalPins[SIGNAL_NUM] = { 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, A0, A1, A2, A3 };
 int pwmPins[MOTOR_NUM * 2] = { 3, 5, 6, 9, 10, 11 };
 int analogPins[SENSOR_NUM] = { A0, A1, A2, A3 };
-int pulsePins[PULSE_NUM * 2] = { 3, 5, 6, 9, 10, 11 , A1, A2 };
+int pulsePins[PULSE_NUM * 2] = { 3, 5, 6, 9, 10, 11, A1, A2 };
 
 void setup()
 {
@@ -205,16 +209,61 @@ void motorSet(const uint8_t* data)
   }
 }
 
+void pulseOut(int num, int value)
+{
+  switch (value)
+  {
+    case -1: // reverse
+      digitalWrite(pulsePins[num * 2], HIGH);
+      digitalWrite(pulsePins[num * 2 + 1], LOW);
+      pulseDir[num] = -1;
+      pulseAct[num] = true;
+      break;
+    case 1: // forward
+      digitalWrite(pulsePins[num * 2], LOW);
+      digitalWrite(pulsePins[num * 2 + 1], HIGH);
+      pulseDir[num] = 1;
+      pulseAct[num] = true;
+      break;
+    case -2: // reverse cont.
+      digitalWrite(pulsePins[num * 2], HIGH);
+      digitalWrite(pulsePins[num * 2 + 1], LOW);
+      pulseDir[num] = -1;
+      pulseAct[num] = false;
+      break;
+    case 2: // forward cont.
+      digitalWrite(pulsePins[num * 2], LOW);
+      digitalWrite(pulsePins[num * 2 + 1], HIGH);
+      pulseDir[num] = 1;
+      pulseAct[num] = false;
+      break;
+    case 0: // off
+    default:
+      digitalWrite(pulsePins[num * 2], LOW);
+      digitalWrite(pulsePins[num * 2 + 1], LOW);
+      pulseDir[num] = 0;
+      pulseAct[num] = false;
+      break;
+  }
+}
+
 // _wwwwwww _DWWWWWW -> D, WWWWWWwwwwwwww
 void motorPulse(const uint8_t* data)
 {
-  int16_t v[PULSE_NUM];
+  unsigned long len;
+  int dir;
+  unsigned long ts = millis();
   for (int t = 0; t < PULSE_NUM; t++)
   {
-    v[t] = ((unsigned)(data[t * 2] & 127)) | (((unsigned)(data[t * 2 + 1] & 63)) << 7);
-    v[t] *= ((data[t * 2] & 64) != 0) ? -1 : 1;
+    len = ((unsigned long)(data[t * 2] & 127)) | (((unsigned long)(data[t * 2 + 1] & 63)) << 7);
+    dir = ((data[t * 2 + 1] & 64) != 0) ? -1 : 1;
+    if ((dir != pulseDir[t]) || (len != pulseTime[t]))
+    {
+      pulseStart[t] = ts;
+      pulseTime[t] = len;
+      pulseOut(t, dir * ((len == 0) ? 2 : 1));
+    }
   }
-  // TODO!!!
 }
 
 void signalOut(unsigned aspects)
@@ -459,7 +508,7 @@ void loop()
       }
       break;
     case DECODER_MOTOR:
-      /*
+      /* TODO!!!
       digitalWrite(PIN_TXE, HIGH);
       Serial.print ("HELLO ");
       Serial.println(ts);
@@ -491,6 +540,15 @@ void loop()
         }
         sensorCnt = (sensorCnt + 1) & 7;
         ts0 = ts;
+      }
+      break;
+    case DECODER_PULSE:
+      for (int t = 0; t < PULSE_NUM; t++)
+      {
+        if (!pulseAct[t])
+          continue;
+        if (timeDiff(pulseStart[t], ts) >= pulseTime[t])
+          pulseOut(t, 0);
       }
       break;
   }

@@ -177,7 +177,7 @@ void commandIn(const char* cmd)
     Serial.println("# help : this help text");
     Serial.println("# signal set : SS <address7 (hex)> <uint32_t data (hex)>");
     Serial.println("# motor.set : MS  <address7 (hex)> <speed (-63...63, +/-0..100%)> x4 : set motor output speed");
-    //Serial.println("# motor.pulse <address7 (hex)> <port (0-3)> <direction (-1..1)> <pulse (0..127 x10 msec, 1/100 second)> : pulse motor output");
+    Serial.println("# motor.pulse : MP <address7 (hex)> <direction [+/-]><pulse (0..8191 msec, 0 = continous)> x4 : pulse motor output");
     Serial.println("# sensor get : SG <address7 (hex)> : get sensor data -> 'OK <val0> <min0> <max0> <val1> <min1> <max1> <val2> <min2> <max2> <val3> <min3> <max3>");
     Serial.println("# stop all : SA");
     Serial.println("# pnp list : PL -> 'info <addr> <type> <status>' *N, 'OK'");
@@ -259,6 +259,7 @@ void commandIn(const char* cmd)
   {
     unsigned addr = 0;
     int m[4];
+    // TODO!!! add detection for -0 values as reverse continous
     if (sscanf(cmd + 3, "%02x %d %d %d %d", &addr, m + 0, m + 1, m + 2, m + 3) != 5)
     {
       sendError(ErrorSyntax, cmd);
@@ -279,21 +280,14 @@ void commandIn(const char* cmd)
       if (m[t] < 0)
       {
         unsigned d = -m[t];
-        pkt[2 + t] = d & 127;
-        pkt[2 + t + 1] = ((d >> 7) & 63) | 64;
+        pkt[2 + t * 2] = d & 127;
+        pkt[2 + t * 2 + 1] = ((d >> 7) & 63) | 64;
       } else
       {
         unsigned d = m[t];
-        pkt[2 + t] = d & 127;
-        pkt[2 + t + 1] = (d >> 7) & 63;
+        pkt[2 + t * 2] = d & 127;
+        pkt[2 + t * 2 + 1] = (d >> 7) & 63;
       }
-      /*
-      int v;
-      if ((pkt[2 + t] & 64) != 0)
-        v = -((pkt[2 + t] & 63) << 2);
-      else
-        v = (pkt[2 + t] & 63) << 2;
-      */
     }
     rLen = rs485txrx(pkt, 11, res, 2);
     if (rLen < 0)
