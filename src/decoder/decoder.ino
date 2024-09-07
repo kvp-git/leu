@@ -1,5 +1,5 @@
 
-// decoder address (1..126)
+// decoder address (1..126 = 0x01..0x7e)
 #define ADDRESS  (0x43)
 // decoder type
 #define DECODER_TYPE DECODER_PULSE
@@ -216,32 +216,27 @@ void pulseOut(int num, int value)
     case -1: // reverse
       digitalWrite(pulsePins[num * 2], HIGH);
       digitalWrite(pulsePins[num * 2 + 1], LOW);
-      pulseDir[num] = -1;
       pulseAct[num] = true;
       break;
     case 1: // forward
       digitalWrite(pulsePins[num * 2], LOW);
       digitalWrite(pulsePins[num * 2 + 1], HIGH);
-      pulseDir[num] = 1;
       pulseAct[num] = true;
       break;
     case -2: // reverse cont.
       digitalWrite(pulsePins[num * 2], HIGH);
       digitalWrite(pulsePins[num * 2 + 1], LOW);
-      pulseDir[num] = -1;
       pulseAct[num] = false;
       break;
     case 2: // forward cont.
       digitalWrite(pulsePins[num * 2], LOW);
       digitalWrite(pulsePins[num * 2 + 1], HIGH);
-      pulseDir[num] = 1;
       pulseAct[num] = false;
       break;
     case 0: // off
     default:
       digitalWrite(pulsePins[num * 2], LOW);
       digitalWrite(pulsePins[num * 2 + 1], LOW);
-      pulseDir[num] = 0;
       pulseAct[num] = false;
       break;
   }
@@ -257,11 +252,14 @@ void motorPulse(const uint8_t* data)
   {
     len = ((unsigned long)(data[t * 2] & 127)) | (((unsigned long)(data[t * 2 + 1] & 63)) << 7);
     dir = ((data[t * 2 + 1] & 64) != 0) ? -1 : 1;
+    if (len == 0)
+      dir = 0;
     if ((dir != pulseDir[t]) || (len != pulseTime[t]))
     {
       pulseStart[t] = ts;
       pulseTime[t] = len;
-      pulseOut(t, dir * ((len == 0) ? 2 : 1));
+      pulseDir[t] = dir;
+      pulseOut(t, dir * ((len == 8191) ? 2 : 1));
     }
   }
 }

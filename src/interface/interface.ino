@@ -177,7 +177,7 @@ void commandIn(const char* cmd)
     Serial.println("# help : this help text");
     Serial.println("# signal set : SS <address7 (hex)> <uint32_t data (hex)>");
     Serial.println("# motor.set : MS  <address7 (hex)> <speed (-63...63, +/-0..100%)> x4 : set motor output speed");
-    Serial.println("# motor.pulse : MP <address7 (hex)> <direction [+/-]><pulse (0..8191 msec, 0 = continous)> x4 : pulse motor output");
+    Serial.println("# motor.pulse : MP <address7 (hex)> <direction [+/-]><pulse (1..8190 msec, 0 = stop, 8191 = continous)> x4 : pulse motor output");
     Serial.println("# sensor get : SG <address7 (hex)> : get sensor data -> 'OK <val0> <min0> <max0> <val1> <min1> <max1> <val2> <min2> <max2> <val3> <min3> <max3>");
     Serial.println("# stop all : SA");
     Serial.println("# pnp list : PL -> 'info <addr> <type> <status>' *N, 'OK'");
@@ -259,7 +259,6 @@ void commandIn(const char* cmd)
   {
     unsigned addr = 0;
     int m[4];
-    // TODO!!! add detection for -0 values as reverse continous
     if (sscanf(cmd + 3, "%02x %d %d %d %d", &addr, m + 0, m + 1, m + 2, m + 3) != 5)
     {
       sendError(ErrorSyntax, cmd);
