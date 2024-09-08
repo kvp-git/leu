@@ -97,4 +97,3 @@ try:
 except Exception as e:
 	print("Exception: " + str(e))
 	lp.serialPortExit()
-	#window.destory()
