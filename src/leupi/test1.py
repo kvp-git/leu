@@ -66,13 +66,13 @@ button9.place(x=160, y=160)
 label1 = tk.Label(master=frame, text="commands/replys", bg="white", anchor="e", justify="left")
 label1.place(x=10, y=200)
 
-label2 = tk.Label(master=frame, text="Sensor 0x41=", bg="white")
+label2 = tk.Label(master=frame, text="sensor readings", bg="white")
 label2.place(x=10, y=260)
 
 def testSerialIn(command, reply):
-	label1.config(text=(command + "\n" + reply))
-	if (command.startswith("SG 41")):
-		label2.config(text=("Sensor 0x41=" + reply))
+	label1.config(text=(command + "\n" + str(reply)))
+	if (command == "SENSOR"):
+		label2.config(text=("sensor: " + str(reply)))
 
 def testQue():
 	global window

@@ -50,6 +50,25 @@ def serialPortSendNext():
 	serialPortWrite(serialCommand)
 	serialPortDevCnt = (serialPortDevCnt + 1) % devLen
 
+def serialParseResponses(command, response, queue):
+	global serialPortMap
+	if (command.startswith("SG ")):
+		cl = command.split(" ")
+		rl = response.split(" ")
+		if ((len(cl) < 2) or (len(rl) < 14)):
+			return
+		#print (cl, rl)
+		address = int(cl[1], 16)
+		if (not (address in serialPortMap)):
+			return
+		sl = [address]
+		sensor = serialPortMap[address]
+		for t in range (0,11):
+			sensor.sensors[t] = int(rl[2 + t], 16)
+			sl.append(sensor.sensors[t])
+		#print(sl)
+		queue.append(["SENSOR", sl])
+
 def serialPortThread():
 	global serialPort
 	global serialPortWindow
@@ -124,6 +143,7 @@ def serialPortThread():
 				else:
 					if (not serialString.startswith("#")):
 						serialQueue.append([serialCommand, serialString])
+						serialParseResponses(serialCommand, serialString, serialQueue)
 					if (serialString.startswith("OK") or serialString.startswith("E")): # TODO!!! list error codes here
 						serialPortSendNext()
 		except Exception as e:
@@ -133,7 +153,7 @@ def serialPortQuePoll():
 	if (len(serialQueue) < 1):
 		return ["", ""]
 	msg = serialQueue[0]
-	serialQueue.pop()
+	serialQueue.popleft()
 	return msg
 
 def serialPortInit(serialPort, window, callback):
