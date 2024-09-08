@@ -87,8 +87,8 @@ def testQue():
 # main:
 try:
 	if len(sys.argv) < 2:
-		print("Usage: test1.py <serial_port>");
-		print("  ex: python test1.py COM9");
+		print("Usage: test1.py <serial_port>")
+		print("  ex: python test1.py COM9")
 		exit(1)
 	lp.serialPortInitFast(sys.argv[1], window, testSerialIn, [[0x41, 3],[0x42, 1],[0x43, 4]])
 	window.after(10, testQue)
