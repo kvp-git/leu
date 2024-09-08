@@ -235,8 +235,8 @@ void pulseOut(int num, int value)
       break;
     case 0: // off
     default:
-      digitalWrite(pulsePins[num * 2], LOW);
-      digitalWrite(pulsePins[num * 2 + 1], LOW);
+      digitalWrite(pulsePins[num * 2], HIGH);     // L293D VCC1 current mitigation (brake mode for modern drivers)
+      digitalWrite(pulsePins[num * 2 + 1], HIGH); // change this to LOW, LOW for modern drivers (freewheeling)
       pulseAct[num] = false;
       break;
   }
