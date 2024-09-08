@@ -49,6 +49,8 @@ def serialPortThread():
 	global serialPortMap
 	global serialPortDevList
 	global serialPortDevCnt
+	global serialPortInitFast
+	global serialPortInitDevices
 	serialPortExitFlag = False
 	serialPortMap = {}
 	serialPort = serial.Serial(port=serialPortName, baudrate=115200, bytesize=8, timeout=2, stopbits=serial.STOPBITS_ONE)
@@ -66,8 +68,26 @@ def serialPortThread():
 					pass
 				if (serialPortPnp):
 					if (serialString.startswith("READY")):
-						serialPortPnp = True
-						serialPortWrite("PL")
+						if (serialPortInitFast):
+							for dev in serialPortInitDevices:
+								addr = dev[0]
+								type = dev[1]
+								stat = 0
+								print("address=" + hex(addr) + " type=" + hex(type) + " status=" + hex(stat))
+								dev = SerialPortDevice(addr, type, stat, 0, [0,0,0,0], [0,0,0,0], [0,0,0,0,0,0,0,0,0,0,0,0])
+								serialPortMap[addr] = dev
+								serialPortDevList.append(addr)
+							serialPortPnp = False
+							print(serialPortDevList)
+							print(serialPortMap)
+							i = 0
+							while (i < len(serialPortDevList)):
+								print(serialPortDevList[i])
+								print(serialPortMap[serialPortDevList[i]])
+								i = i + 1
+							serialPortSendNext()
+						else:
+							serialPortWrite("PL")
 					if (serialString.startswith("info ")):
 						cmd = serialString.split(" ")
 						if (len(cmd) >= 3):
@@ -104,6 +124,18 @@ def serialPortInit(window, serialPort):
 	th = threading.Thread(target=serialPortThread)
 	th.start()
 
+def serialPortInitFast(window, serialPort, devices):
+	global serialPortWindow
+	global serialPortName
+	global serialPortInitFast
+	global serialPortInitDevices
+	serialPortWindow = window
+	serialPortName = serialPort
+	serialPortInitFast = True
+	serialPortInitDevices = devices
+	th = threading.Thread(target=serialPortThread)
+	th.start()
+
 def serialPortExit():
 	global serialPortExitFlag
 	serialPortExitFlag = True
@@ -117,3 +149,16 @@ def signalSet(address, aspects):
 		return
 	signal = serialPortMap[address]
 	signal.signals = aspects
+
+def signalSetAspect(address, offset, size, aspects):
+	global serialPortMap
+	if (not (address in serialPortMap)):
+		return
+	mask = ((2 ** size) - 1)
+	masks = (mask << offset) | (mask << (offset + 16))
+	#print("MASK=" + hex(mask))
+	#print("MASKS=" + hex(masks))
+	aspect = ((aspects[0] & mask) << offset) | ((aspects[1] & mask) << (offset + 16))
+	#print("ASPECTS=" + hex(aspect))
+	signal = serialPortMap[address]
+	signal.signals = ((signal.signals & ~masks) | aspect)
