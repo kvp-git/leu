@@ -169,7 +169,7 @@ static const char* ErrorValue = "EVAL";
 void commandIn(const char* cmd)
 {
   uint8_t pkt[8];
-  uint8_t res[16];
+  uint8_t res[64];
   int rLen;
   if ((strcmp(cmd, "help") == 0) || (strcmp(cmd, "H") == 0))
   {
@@ -307,7 +307,7 @@ void commandIn(const char* cmd)
     rLen = rs485txrx(pkt, 3, res, 14);
     if (rLen < 0)
     {
-              Serial.println(rLen);
+      Serial.println(rLen);
       sendResult(rLen);
       return;
     }

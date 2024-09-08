@@ -3,13 +3,14 @@
 import serial
 import threading
 from dataclasses import dataclass
+from collections import deque
 
 @dataclass
 class SerialPortDevice:
 	addr    : str
 	type    : int
 	status  : int
-	signals : list
+	signals : int
 	speeds  : list[int]
 	pulses  : list[int]
 	sensors : list[int]
@@ -29,16 +30,24 @@ def serialPortSendNext():
 	global serialPortMap
 	global serialPortDevList
 	global serialPortDevCnt
+	global serialCommand
+	global serialQueue
 	devLen = len(serialPortDevList)
 	if (devLen < 1):
 		return
 	dev = serialPortMap[serialPortDevList[serialPortDevCnt]]
 	print("address=" + hex(dev.addr) + " type=" + hex(dev.type))
-	#serialPortWrite("PG " + hex(dev.addr)[2:])
 	if (dev.type == 1):
-		serialPortWrite("SS " + hex(dev.addr)[2:] + " " + hex(dev.signals)[2:])
+		serialCommand = "SS " + hex(dev.addr)[2:] + " " + hex(dev.signals)[2:]
+	elif (dev.type == 2):
+		serialCommand = "PG " + hex(dev.addr)[2:] # TODO!!!
+	elif (dev.type == 3):
+		serialCommand = "PG " + hex(dev.addr)[2:]
+	elif (dev.type == 4):
+		serialCommand = "MP " + hex(dev.addr)[2:] + " " + str(dev.pulses[0]) + " " + str(dev.pulses[1]) + " " + str(dev.pulses[2]) + " " + str(dev.pulses[3])
 	else:
-		serialPortWrite("PG " + hex(dev.addr)[2:])
+		serialCommand = "PG " + hex(dev.addr)[2:]
+	serialPortWrite(serialCommand)
 	serialPortDevCnt = (serialPortDevCnt + 1) % devLen
 
 def serialPortThread():
@@ -51,17 +60,20 @@ def serialPortThread():
 	global serialPortDevCnt
 	global serialPortInitFast
 	global serialPortInitDevices
+	global serialCommand
+	global serialQueue
 	serialPortExitFlag = False
 	serialPortMap = {}
+	serialQueue = deque()
 	serialPort = serial.Serial(port=serialPortName, baudrate=115200, bytesize=8, timeout=2, stopbits=serial.STOPBITS_ONE)
 	serialPortWrite("help")
 	serialString = ""
 	serialPortPnp = True
 	serialPortDevList = []
 	serialPortDevCnt = 0
-	while not serialPortExitFlag:
-		serialString = serialPort.readline().decode("iso-8859-2").strip()
+	while (not serialPortExitFlag):
 		try:
+			serialString = serialPort.readline().decode("iso-8859-2").strip()
 			if (serialString != ""):
 				print(">" + serialString)
 				if (serialString.startswith("#")):
@@ -110,26 +122,38 @@ def serialPortThread():
 							i = i + 1
 						serialPortSendNext()
 				else:
+					if (not serialString.startswith("#")):
+						serialQueue.append([serialCommand, serialString])
 					if (serialString.startswith("OK") or serialString.startswith("E")): # TODO!!! list error codes here
 						serialPortSendNext()
-				#serialPortWindow.after(1, serialIn, serialString)
 		except Exception as e:
 			print("Exception: " + str(e))
 
-def serialPortInit(window, serialPort):
+def serialPortQuePoll():
+	if (len(serialQueue) < 1):
+		return ["", ""]
+	msg = serialQueue[0]
+	serialQueue.pop()
+	return msg
+
+def serialPortInit(serialPort, window, callback):
 	global serialPortWindow
+	global serialPortCallback
 	global serialPortName
 	serialPortWindow = window
+	serialPortCallback = callback
 	serialPortName = serialPort
 	th = threading.Thread(target=serialPortThread)
 	th.start()
 
-def serialPortInitFast(window, serialPort, devices):
+def serialPortInitFast(serialPort, window, callback, devices):
 	global serialPortWindow
+	global serialPortCallback
 	global serialPortName
 	global serialPortInitFast
 	global serialPortInitDevices
 	serialPortWindow = window
+	serialPortCallback = callback
 	serialPortName = serialPort
 	serialPortInitFast = True
 	serialPortInitDevices = devices
@@ -139,9 +163,10 @@ def serialPortInitFast(window, serialPort, devices):
 def serialPortExit():
 	global serialPortExitFlag
 	serialPortExitFlag = True
-
-def serialPortSendCommand(command):
-	pass # TODO!!!
+	try:
+		serialPort.close()
+	except Exception as e:
+		pass
 
 def signalSet(address, aspects):
 	global serialPortMap
@@ -149,6 +174,13 @@ def signalSet(address, aspects):
 		return
 	signal = serialPortMap[address]
 	signal.signals = aspects
+
+def motorPulse(address, port, value):
+	global serialPortMap
+	if (not (address in serialPortMap)):
+		return
+	motor = serialPortMap[address]
+	motor.pulses[port] = value
 
 def signalSetAspect(address, offset, size, aspects):
 	global serialPortMap
