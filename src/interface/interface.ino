@@ -171,11 +171,11 @@ void commandIn(const char* cmd)
   uint8_t pkt[8];
   uint8_t res[16];
   int rLen;
-  if (strStartsWith(cmd, "help", 4))
+  if ((strcmp(cmd, "help") == 0) || (strcmp(cmd, "H") == 0))
   {
     Serial.println("# Commands:");
-    Serial.println("# help : this help text");
-    Serial.println("# signal set : SS <address7 (hex)> <uint32_t data (hex)>");
+    Serial.println("# help : H : this help text");
+    Serial.println("# signal set : SS <address7 (hex)> <uint32_t data (hex)> : set signal aspects (blink0_16:blink1_16)");
     Serial.println("# motor.set : MS  <address7 (hex)> <speed (-63...63, +/-0..100%)> x4 : set motor output speed");
     Serial.println("# motor.pulse : MP <address7 (hex)> <direction [+/-]><pulse (1..8190 msec, 0 = stop, 8191 = continous)> x4 : pulse motor output");
     Serial.println("# sensor get : SG <address7 (hex)> : get sensor data -> 'OK <val0> <min0> <max0> <val1> <min1> <max1> <val2> <min2> <max2> <val3> <min3> <max3>");
@@ -186,7 +186,7 @@ void commandIn(const char* cmd)
     Serial.println(ErrorOk);
     return;
   } else
-  if (strStartsWith(cmd, "SA", 2))
+  if (strcmp(cmd, "SA") == 0)
   {
     pkt[0] = ADDR_ALL;
     pkt[1] = CMD_STOP_ALL;
@@ -320,7 +320,7 @@ void commandIn(const char* cmd)
     Serial.println();
     return;
   } else
-  if (strStartsWith(cmd, "PL", 2))
+  if (strcmp(cmd, "PL") == 0)
   {
     for (int addr = 1; addr < 127; addr++)
     {

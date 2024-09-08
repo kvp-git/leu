@@ -38,7 +38,7 @@ enum STATES
 };
 
 #define SIGNAL_BLINK_MSEC (500)
-#define SENSOR_POLL_MSEC (50)
+#define SENSOR_POLL_MSEC  (50)
 
 #define FLAG_RESET  (1)
 #define FLAG_MOTOR0 (2)
@@ -58,7 +58,7 @@ unsigned statusFlags = FLAG_RESET;
 uint8_t pktBuf[128];
 unsigned pktCnt = 0;
 
-uint16_t signals[2] = {0x5555, 0xaaaa};
+uint16_t signals[2] = {};
 unsigned signalsCnt = 0;
 uint8_t motors[MOTOR_NUM] = {};
 uint8_t sensors[SENSOR_NUM * 3] = {};
@@ -67,7 +67,6 @@ int8_t pulseDir[PULSE_NUM] = {};
 bool   pulseAct[PULSE_NUM] = {};
 unsigned long pulseStart[PULSE_NUM] = {};
 unsigned long pulseTime[PULSE_NUM] = {};
-
 
 unsigned long timeDiff(unsigned long t0, unsigned long t1)
 {
@@ -141,10 +140,6 @@ they are the bits we have to change.
       TCCR0B = (TCCR0B & (~7)) | 2;
       TCCR1B = (TCCR1B & (~7)) | 2;
       TCCR2B = (TCCR2B & (~7)) | 2;
-      /*
-      uint8_t pkt[3] = {16, 16, 16};
-      motorSet(pkt);
-      */
       break;
     }
     case DECODER_SENSOR:
@@ -158,19 +153,11 @@ they are the bits we have to change.
       for (int t = 0; t < PULSE_NUM * 2; t++)
       {
         pinMode(pulsePins[t], OUTPUT);
-        digitalWrite(pulsePins[t], LOW);
+        digitalWrite(pulsePins[t], HIGH); // L293D VCC1 current mitigation, TODO: change to LOW with modern drivers
       }
-      
       break;
     }
   }
-  /*
-  digitalWrite(PIN_TXE, HIGH);
-  uint8_t pkt[2] = {0x55, 0xaa};
-  Serial.write(pkt, 2);
-  Serial.flush();
-  digitalWrite(PIN_TXE, LOW);
-  */
 }
 
 void signalSet(const uint8_t* data)
@@ -261,6 +248,7 @@ void motorPulse(const uint8_t* data)
       pulseDir[t] = dir;
       pulseOut(t, dir * ((len == 8191) ? 2 : 1));
     }
+    statusFlags |= (1 << (t + 1));
   }
 }
 
@@ -273,7 +261,7 @@ void signalOut(unsigned aspects)
 void pktSend(uint8_t* pkt, size_t len)
 {
   if (DECODER_TYPE == DECODER_MOTOR)
-    delay(10*7); // TODO!!! clean this up
+    delay(10*7); // TODO!!! fix pwm timing issues
   else
     delay(10);
   unsigned chk = 0xff;
@@ -360,6 +348,7 @@ bool cmdIn(const uint8_t* pkt, size_t len)
       break;
     }
     case CMD_STOP_ALL:
+    {
       switch (DECODER_TYPE)
       {
         case DECODER_SIGNAL:
@@ -386,6 +375,7 @@ bool cmdIn(const uint8_t* pkt, size_t len)
       res[0] = statusFlags;
       pktSend(res, 2);
       break;
+    }
   }
   return true;
 }
