@@ -168,7 +168,7 @@ static const char* ErrorValue = "EVAL";
 
 void commandIn(const char* cmd)
 {
-  uint8_t pkt[8];
+  uint8_t pkt[32];
   uint8_t res[64];
   int rLen;
   if ((strcmp(cmd, "help") == 0) || (strcmp(cmd, "H") == 0))

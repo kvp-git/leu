@@ -42,7 +42,7 @@ def serialPortSendNext():
 	elif (dev.type == 2):
 		serialCommand = "PG " + hex(dev.addr)[2:] # TODO!!!
 	elif (dev.type == 3):
-		serialCommand = "PG " + hex(dev.addr)[2:]
+		serialCommand = "SG " + hex(dev.addr)[2:]
 	elif (dev.type == 4):
 		serialCommand = "MP " + hex(dev.addr)[2:] + " " + str(dev.pulses[0]) + " " + str(dev.pulses[1]) + " " + str(dev.pulses[2]) + " " + str(dev.pulses[3])
 	else:

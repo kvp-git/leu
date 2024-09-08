@@ -36,7 +36,7 @@ def testPulse6():
 
 
 window = tk.Tk()
-window.title("This is an application")
+window.title("This is a test application")
 window.minsize(640, 480)
 window.maxsize(640, 480)
 
@@ -51,23 +51,23 @@ button3 = tk.Button(master=frame, text ="yellow blinking", command = testSetSign
 button3.place(x=10, y=70)
 
 button4 = tk.Button(master=frame, text ="pulse 1 left 1000", command = testPulse1)
-button4.place(x=400, y=10)
+button4.place(x=160, y=10)
 button5 = tk.Button(master=frame, text ="pulse 1 right 200", command = testPulse2)
-button5.place(x=400, y=40)
+button5.place(x=160, y=40)
 button6 = tk.Button(master=frame, text ="pulse 1 stop (reset)", command = testPulse6)
-button6.place(x=400, y=70)
+button6.place(x=160, y=70)
 button7 = tk.Button(master=frame, text ="pulse 2 left continous", command = testPulse3)
-button7.place(x=400, y=100)
+button7.place(x=160, y=100)
 button8 = tk.Button(master=frame, text ="pulse 2 right continous", command = testPulse4)
-button8.place(x=400, y=130)
+button8.place(x=160, y=130)
 button9 = tk.Button(master=frame, text ="pulse 2 stop", command = testPulse5)
-button9.place(x=400, y=160)
+button9.place(x=160, y=160)
 
-label1 = tk.Label(master=frame, text="commands/replys", bg="white")
-label1.place(x=160, y=10)
+label1 = tk.Label(master=frame, text="commands/replys", bg="white", anchor="e", justify="left")
+label1.place(x=10, y=200)
 
 label2 = tk.Label(master=frame, text="Sensor 0x41=", bg="white")
-label2.place(x=160, y=60)
+label2.place(x=10, y=260)
 
 def testSerialIn(command, reply):
 	label1.config(text=(command + "\n" + reply))
@@ -76,11 +76,13 @@ def testSerialIn(command, reply):
 
 def testQue():
 	global window
-	msg = lp.serialPortQuePoll()
-	if (msg[0] != ""):
-		#print("TEST:" + str(msg))
-		testSerialIn(msg[0], msg[1])
-	window.after(10, testQue) #serialPortCallback, serialCommand, serialString)
+	for i in range(0,100):
+		msg = lp.serialPortQuePoll()
+		if (msg[0] != ""):
+			testSerialIn(msg[0], msg[1])
+		else:
+			break;
+	window.after(10, testQue)
 
 # main:
 try:
