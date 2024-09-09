@@ -63,7 +63,7 @@ def serialParseResponses(command, response, queue):
 			return
 		sl = [address]
 		sensor = serialPortMap[address]
-		for t in range (0,11):
+		for t in range (0,12):
 			sensor.sensors[t] = int(rl[2 + t], 16)
 			sl.append(sensor.sensors[t])
 		#print(sl)
